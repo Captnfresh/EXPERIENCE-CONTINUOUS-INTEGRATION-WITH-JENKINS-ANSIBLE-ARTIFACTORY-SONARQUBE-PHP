@@ -299,26 +299,60 @@ ssh -A ubuntu@<Private IP address of Jenkins Server>
 ```
 
 3. Install & Open Blue Ocean Jenkins Plugin
-In the Jenkins dashboard, click on **Manage Jenkins** -> **Manage plugins** and search for `Blue Ocean plugin`. Install and open Blue Ocean plugin
-![1](https://github.com/user-attachments/assets/beb5d74d-cfa0-4d60-bcc4-4f8fc9f1d579)
+In the Jenkins dashboard, click on **Manage Jenkins** -> **Manage plugins** and search for `Blue Ocean plugin` from Available Plugins. Install and open Blue Ocean plugin
 
-4. Create a new pipeline and select Github
+![image](https://github.com/user-attachments/assets/261a864f-63c8-4cb3-a54b-769c292d06aa)
 
-5. Connect Jenkins with GitHub
+![image](https://github.com/user-attachments/assets/cd42e3a7-1412-4aa2-b0fe-b5293d099b75)
 
-6. Login to GitHub & Generate an Access Token
+![image](https://github.com/user-attachments/assets/e7a6df40-cc26-406c-a2be-7fe38344948f)
 
-7. Copy Access Token
+![image](https://github.com/user-attachments/assets/f633d785-7b83-4e14-a5a3-85d6e7e98e1b)
 
-8. Paste the token and connect
 
-9. Create a new Pipeline
+5. Create a new pipeline and select Github
+
+![image](https://github.com/user-attachments/assets/55d53590-49b2-4392-bf37-e63166c108e0)
+
+
+6. Connect Jenkins with GitHub
+
+7. Login to GitHub & Generate an Access Token
+
+![image](https://github.com/user-attachments/assets/a9fd0011-51e0-4131-a4ec-3e1d567bb90e)
+
+![image](https://github.com/user-attachments/assets/cebf92d1-99e1-4b4c-b3d0-2967b8c0fbfc)
+
+![image](https://github.com/user-attachments/assets/8f473e0b-6889-45f9-9c29-7baf6c4b611a)
+
+![image](https://github.com/user-attachments/assets/85f452d0-d994-4b0e-bce8-df34dcf2155b)
+
+![image](https://github.com/user-attachments/assets/af23ce43-ece7-48ac-a519-0bafcf5ad434)
+
+![image](https://github.com/user-attachments/assets/4d661f08-bf6d-4b9c-b20b-c6bebbb2f07e)
+
+![image](https://github.com/user-attachments/assets/ba8891db-0feb-4e40-bd49-b7064d002c45)
+
+
+8. Copy Access Token
+
+![image](https://github.com/user-attachments/assets/57f2d0fe-ae38-40e2-80b4-af63fc0a65a9)
+
+9. Paste the token and connect
+
+10. Create a new Pipeline
+
+![image](https://github.com/user-attachments/assets/7c31c7a4-9d6c-4cde-9be7-9078916ae1d7)
+
 
 At this point you may not have a Jenkinsfile in the Ansible repository, so Blue Ocean will attempt to give you some guidance to create one. But we do not need that. We will rather create one ourselves. So, click on Administration to exit the Blue Ocean console.
 
+![image](https://github.com/user-attachments/assets/a5c38554-e5f3-4380-8ae4-f1dc438f9e6b)
+
+
 ### Here is the newly created pipeline. It takes the name of your GitHub repository
 
-![image](https://github.com/user-attachments/assets/09bc29e1-ab5b-4059-87a9-83881c1154b2)
+![image](https://github.com/user-attachments/assets/4b4964e8-1d59-4045-936c-f92b52816e4a)
 
 
 ## Let us create the Jenkinsfile
@@ -339,14 +373,91 @@ pipeline {
     }
 }
 ```
-![image](https://github.com/user-attachments/assets/dc60c9f4-0c4e-407d-97bc-5e751477fccd)
+
+![image](https://github.com/user-attachments/assets/c57cacdc-43cb-4abb-bb13-2b067436e734)
+
 Now go back into the Ansible pipeline in Jenkins, and select configure
 
+![image](https://github.com/user-attachments/assets/be9a96ff-f75a-4850-8e57-3beabf4da60b)
 
 
+Scroll down to Build Configuration section and specify the location of the Jenkinsfile at `deploy/Jenkinsfile`
+
+![image](https://github.com/user-attachments/assets/e38e4081-54c6-4bd4-86fd-365b5b7a048b)
+
+Back to the pipeline again, this time click `Build now`.
+
+![image](https://github.com/user-attachments/assets/b2e2508f-7984-4971-b658-7b32aa01a68b)
+
+This will trigger a build and you will be able to see the effect of our basic Jenkinsfile configuration by going through the console output of the build.
+
+![image](https://github.com/user-attachments/assets/7b2041d4-963f-4da7-9898-f749c624504d)
+
+To really appreciate and feel the difference of Cloud Blue UI, it is recommended to try triggering the build again from Blue Ocean interface. Click on Open Blue Ocean
+
+![image](https://github.com/user-attachments/assets/ffec67b4-53eb-455f-b6e3-bb1332588628)
+> Notice that this pipeline is a multibranch one. This means, if there were more than one branch in GitHub, Jenkins would have scanned the repository to discover them all and we would have been able to trigger a build for each branch.
 
 
+Let us see this in action.
 
+1. Create a new git branch and name it `feature/jenkinspipeline-stages`
+
+```
+pipeline {
+    agent any
+
+  stages {
+    stage('Build') {
+      steps {
+        script {
+          sh 'echo "Building Stage"'
+        }
+      }
+    }
+
+    stage('Test') {
+      steps {
+        script {
+          sh 'echo "Testing Stage"'
+        }
+      }
+    }
+    }
+}
+```
+
+![image](https://github.com/user-attachments/assets/69c124b5-2943-444d-9a28-ef67ccf3c588)
+
+2. To make your new branch show up in Jenkins, we need to tell Jenkins to scan the repository.
+
+3. Click on the "Administration" button
+
+4. Navigate to the Ansible project and click on Scan repository now
+
+5. Refresh the page and both branches will start building automatically. You can go into Blue Ocean and see both branches there too.
+
+![image](https://github.com/user-attachments/assets/edfb6703-7196-478b-a45f-3e8f8fa2ab02)
+
+6. In Blue Ocean, you can now see how the Jenkinsfile has caused a new step in the pipeline launch build for the new branch.
+
+![image](https://github.com/user-attachments/assets/36f4e02f-a61c-4721-a0e2-673893c177ed)
+
+## A QUICK TASK FOR YOU!
+
+```
+1. Create a pull request to merge the latest code into the main branch
+2. After merging the PR, go back into your terminal and switch into the main branch.
+3. Pull the latest change.
+4. Create a new branch, add more stages into the Jenkins file to simulate below phases. (Just add an echo command like we have in build
+and test stages)
+   * Package
+   * Deploy
+   * Clean up
+5. Verify in the Blue Ocean that all the stages are working, then merge your feature branch to your main branch
+6. Eventually, your main branch should have a successful pipeline like this in blue ocean
+```
+![image](https://github.com/user-attachments/assets/e1e6f5fb-0edf-40db-8ba8-6f37c31e7d93)
 
 
 
