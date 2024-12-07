@@ -278,6 +278,71 @@ In this structure:
 
 ---
 
+### Configuring Ansible For Jenkins Deployment
+
+In previous projects, you have been launching Ansible commands manually from a CLI. Now, with Jenkins, we will start running Ansible
+from Jenkins UI.
+
+**To do this**
+1. Set up SSH-agent
+
+```
+eval `ssh-agent -s`
+ssh-add <Path to Private keykey.pem>
+ssh-add -l 
+ssh -A ubuntu@<Private IP address of Jenkins Server>
+```
+
+2. Navigate to Jenkins URL
+```
+<Jenkins-server-public-IP>:8080
+```
+
+3. Install & Open Blue Ocean Jenkins Plugin
+In the Jenkins dashboard, click on **Manage Jenkins** -> **Manage plugins** and search for `Blue Ocean plugin`. Install and open Blue Ocean plugin
+![1](https://github.com/user-attachments/assets/beb5d74d-cfa0-4d60-bcc4-4f8fc9f1d579)
+
+4. Create a new pipeline and select Github
+
+5. Connect Jenkins with GitHub
+
+6. Login to GitHub & Generate an Access Token
+
+7. Copy Access Token
+
+8. Paste the token and connect
+
+9. Create a new Pipeline
+
+At this point you may not have a Jenkinsfile in the Ansible repository, so Blue Ocean will attempt to give you some guidance to create one. But we do not need that. We will rather create one ourselves. So, click on Administration to exit the Blue Ocean console.
+
+### Here is the newly created pipeline. It takes the name of your GitHub repository
+
+![image](https://github.com/user-attachments/assets/09bc29e1-ab5b-4059-87a9-83881c1154b2)
+
+
+## Let us create the Jenkinsfile
+In Vscode, inside the Ansible project, create a new directory and name it deploy, create a new file Jenkinsfile inside the directory. Add the code snippet below to start building the Jenkinsfile gradually. This pipeline currently has just one stage called Build and the only thing we are doing is using the shell script module to echo Building Stage.
+
+```
+pipeline {
+    agent any
+
+  stages {
+    stage('Build') {
+      steps {
+        script {
+          sh 'echo "Building Stage"'
+        }
+      }
+    }
+    }
+}
+```
+![image](https://github.com/user-attachments/assets/dc60c9f4-0c4e-407d-97bc-5e751477fccd)
+Now go back into the Ansible pipeline in Jenkins, and select configure
+
+
 
 
 
