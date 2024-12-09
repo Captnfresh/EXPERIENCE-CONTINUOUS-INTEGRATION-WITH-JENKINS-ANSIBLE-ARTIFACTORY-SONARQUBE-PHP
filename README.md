@@ -278,7 +278,7 @@ In this structure:
 
 ---
 
-### Configuring Ansible For Jenkins Deployment
+## Configuring Ansible For Jenkins Deployment
 
 In previous projects, you have been launching Ansible commands manually from a CLI. Now, with Jenkins, we will start running Ansible
 from Jenkins UI.
@@ -457,7 +457,150 @@ and test stages)
 5. Verify in the Blue Ocean that all the stages are working, then merge your feature branch to your main branch
 6. Eventually, your main branch should have a successful pipeline like this in blue ocean
 ```
+
+### Your new `Jenkinsfile` should look like this below:
+```
+pipeline {
+    agent any
+    
+    stages {
+        stage('Build') {
+            steps {
+                echo 'Building...'
+            }
+        }
+        stage('Test') {
+            steps {
+                echo 'Testing...'
+            }
+        }
+        stage('Package') {
+            steps {
+                echo 'Packaging...'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                echo 'Deploying...'
+            }
+        }
+        stage('Clean up') {
+            steps {
+                echo 'Cleaning up...'
+            }
+        }
+    }
+}
+
+```
+
+### And your main branch should have a successful pipeline like this in blue ocean:
 ![image](https://github.com/user-attachments/assets/e1e6f5fb-0edf-40db-8ba8-6f37c31e7d93)
+
+
+## Running Ansible Playbook from Jenkins
+
+Now that you have a broad overview of a typical Jenkins pipeline. Let us get the actual Ansible deployment to work by:
+
+1. Installing Ansible on Jenkins
+
+```
+sudo apt update
+sudo apt upgrade -y
+```
+2. Installing Required Dependencies
+
+```
+sudo apt install software-properties-common -y
+```
+
+3. Adding the Ansible PPA (Personal Package Archive)
+
+```
+sudo add-apt-repository --yes --update ppa:ansible/ansible
+```
+
+4. Verify the Installation
+
+```
+sudo apt update
+sudo apt install ansible -y
+ansible --version
+```
+![image](https://github.com/user-attachments/assets/dff05bbe-86dc-48c1-b42c-085a5d6ef96d)
+
+5. Installing Ansible plugin in Jenkins UI On the dashboard page, Click on Manage Jenkins >>> Manage plugins >>> Available type in ansible and install without restart
+
+![image](https://github.com/user-attachments/assets/a59141fc-a1a5-4146-9633-3b16ad5d0689)
+
+![image](https://github.com/user-attachments/assets/9a25c787-ddea-4989-ae41-1ae6efac3178)
+ 
+
+#### Now we can add a name and the path ansible is installed on the jenkins server.Firstly get the path in which ansible was installed on your Jenkins server. 
+
+```
+ which ansible
+```
+![image](https://github.com/user-attachments/assets/168a9578-5aad-48c5-a1cd-62626836fe82)
+
+
+#### Click on Dashboard >>> Manage Jenkins >>> Tool Configuration >>> Add Ansible >>> Add file path. 
+
+![image](https://github.com/user-attachments/assets/64601186-a8fa-4ac1-b454-2d1e792bb9d7)
+
+![image](https://github.com/user-attachments/assets/922bee02-c8e2-4833-b8ea-cc738449e5b6)
+
+
+6. Creating `Jenkinsfile` from scratch. (Delete all you currently have in there and start all over to get Ansible to run successfully)
+   * Let's delete the content of current `Jenkinsfile` and create a new `Jenkinsfile` from scratch to run the ansible playbook against the dev environment.
+   * To do this let's ensure git module is checking out SCM from main branch.
+
+```
+    pipeline {
+    agent any
+
+  stages {
+     stage("Initial cleanup") {
+      steps {
+        dir("${WORKSPACE}") {
+          deleteDir()
+        }
+      }
+    }
+
+    stage('Checkout SCM') {
+      steps {
+        git branch: 'main', credentialsId: '6610fbef-537f-49d7-ab4b-e7e57776dffe', url: 'https://github.com/Captnfresh/ansible-config-mgt'
+      }
+    }
+      stage('Test SSH Connection') {
+            steps {
+                sshagent(['private_key']) {  // 'ansible' is the ID of the credentials
+                    sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.91.90 exit'
+                }
+            }
+        }
+   
+
+
+    stage('Run Ansible playbook') {
+      steps {
+       ansiblePlaybook credentialsId: 'private_key', disableHostKeyChecking: true, installation: 'ansible-config-mgt', inventory: 'inventory/dev.yml', playbook: 'playbooks/site.yml', vaultTmpPath: ''
+      }
+    }
+      stage('Clean Workspace after build') {
+      steps {
+        cleanWs(cleanWhenAborted: true, cleanWhenFailure: true, cleanWhenNotBuilt: true, cleanWhenUnstable: true, deleteDirs: true)
+      }
+    }
+
+
+    }
+}
+
+
+```
+
 
 
 
