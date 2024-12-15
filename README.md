@@ -874,7 +874,7 @@ pipeline {
 
 4. Update the jenkins file to included the ansible tags before it runs playbook:
 
-![image](https://github.com/user-attachments/assets/f817651f-5f21-42bf-a9a0-94125f6fae05)
+![image](https://github.com/user-attachments/assets/36d7bcbe-b26d-4d67-872e-a78318b7317f)
 
 ---
 
