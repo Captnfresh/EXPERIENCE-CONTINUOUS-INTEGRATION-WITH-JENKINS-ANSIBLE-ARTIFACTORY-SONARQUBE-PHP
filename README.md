@@ -556,74 +556,345 @@ ansible --version
    * To do this let's ensure git module is checking out SCM from main branch.
 
 ```
-    pipeline {
+pipeline {
     agent any
 
-  stages {
-     stage("Initial cleanup") {
-      steps {
-        dir("${WORKSPACE}") {
-          deleteDir()
-        }
-      }
+    environment {
+        ANSIBLE_CONFIG = "${WORKSPACE}/deploy/ansible.cfg"
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
     }
 
-    stage('Checkout SCM') {
-      steps {
-        git branch: 'main', credentialsId: '6610fbef-537f-49d7-ab4b-e7e57776dffe', url: 'https://github.com/Captnfresh/ansible-config-mgt'
-      }
-    }
-      stage('Test SSH Connection') {
+    stages {
+        stage("Initial cleanup") {
             steps {
-                sshagent(['private_key']) {  // 'ansible' is the ID of the credentials
-                    sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.91.90 exit'
+                dir("${WORKSPACE}") {
+                    deleteDir()
                 }
             }
         }
-   
+
+        stage('Checkout SCM') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Captnfresh/ansible-config-mgt.git'
+            }
+        }
+
+        stage('Prepare Ansible For Execution') {
+            steps {
+                sh """
+                echo ${WORKSPACE}
+                if grep -q '^roles_path=' ${WORKSPACE}/deploy/ansible.cfg; then
+                    sed -i "s|^roles_path=.*|roles_path=${WORKSPACE}/roles|" ${WORKSPACE}/deploy/ansible.cfg
+                else
+                    echo "roles_path=${WORKSPACE}/roles" >> ${WORKSPACE}/deploy/ansible.cfg
+                fi
+                """
+            }
+        }
 
 
-    stage('Run Ansible playbook') {
-      steps {
-       ansiblePlaybook credentialsId: 'private_key', disableHostKeyChecking: true, installation: 'ansible-config-mgt', inventory: 'inventory/dev.yml', playbook: 'playbooks/site.yml', vaultTmpPath: ''
-      }
-    }
-      stage('Clean Workspace after build') {
-      steps {
-        cleanWs(cleanWhenAborted: true, cleanWhenFailure: true, cleanWhenNotBuilt: true, cleanWhenUnstable: true, deleteDirs: true)
-      }
-    }
+        stage('Test SSH Connections') {
+            steps {
+                script {
+                    def hosts = [
+                        [group: 'uat-webservers', ip: '172.31.26.143', user: 'ec2-user'],
+                        [group: 'uat-webservers', ip: '172.31.18.71', user: 'ec2-user'],
+                        [group: 'lb', ip: '172.31.18.31', user: 'ubuntu'],
+                        [group: 'db', ip: '172.31.30.166', user: 'ubuntu']
+                    ]
+                    for (host in hosts) {
+                        sshagent(['ssh-ansible']) {
+                            sh "ssh -o StrictHostKeyChecking=no -i /home/ubuntu/.ssh/key.pem ${host.user}@${host.ip} exit"
+                        }
+                    }
+                }
+            }
+        }
 
+        stage('Run Ansible playbook') {
+            steps {
+                sshagent(['ssh-ansible']) {
+                    ansiblePlaybook(
+                        become: true,
+                        credentialsId: 'ssh-ansible',
+                        disableHostKeyChecking: true,
+                        installation: 'ansible',
+                        inventory: "${WORKSPACE}/inventory/dev.yml",
+                        playbook: "${WORKSPACE}/playbooks/site.yml"
+                    )
+                }
+            }
+        }
 
+        stage('Clean Workspace after build') {
+            steps {
+                cleanWs(cleanWhenAborted: true, cleanWhenFailure: true, cleanWhenNotBuilt: true, cleanWhenUnstable: true, deleteDirs: true)
+            }
+        }
     }
 }
 
+
+```
+
+![image](https://github.com/user-attachments/assets/4fe780e3-d875-439a-8d0d-273cf3df54b5)
+
+---
+## Let's do a Line by Line explanation of the script above
+
+### Pipeline Declaration
+
+```
+pipeline {
+    agent any
+```
+
+* pipeline {}: This defines the start of the pipeline script.
+* agent any: This specifies that the pipeline can run on any available Jenkins agent (node).
+
+### Environment Variables
+```
+environment {
+    ANSIBLE_CONFIG = "${WORKSPACE}/deploy/ansible.cfg"
+    ANSIBLE_HOST_KEY_CHECKING = 'False'
+}
+```
+
+* environment {}: Sets environment variables for the entire pipeline.
+* ANSIBLE_CONFIG: Points to the Ansible configuration file (ansible.cfg) located in the deploy directory of the current workspace.
+* ANSIBLE_HOST_KEY_CHECKING: Disables strict host key checking, preventing SSH from prompting for key confirmation.
+
+
+### Stages Declaration
+
+```
+stages {
+```
+
+* stages {}: A block that contains all the stages of the pipeline.
+
+
+### Stage: Initial Cleanup
+
+```
+stage("Initial cleanup") {
+    steps {
+        dir("${WORKSPACE}") {
+            deleteDir()
+        }
+    }
+}
+```
+
+* stage("Initial cleanup"): This defines a stage for cleaning the workspace.
+* dir("${WORKSPACE}"): This points to the current workspace directory.
+* deleteDir(): This deletes all files and folders within the workspace to ensure a clean slate for the build.
+
+
+### Stage: Checkout SCM
+
+```
+stage('Checkout SCM') {
+    steps {
+        git branch: 'main', url: 'https://github.com/AyopoB/ansible-config-mgt.git'
+    }
+}
+```
+
+* stage('Checkout SCM'): This pulls the source code from the Git repository.
+* git branch: 'main', url: ...: This specifies the branch (main) and the GitHub repository URL to clone into the workspace.
+
+
+### Stage: Prepare Ansible For Execution
+
+```
+stage('Prepare Ansible For Execution') {
+    steps {
+        sh """
+        echo ${WORKSPACE}
+        if grep -q '^roles_path=' ${WORKSPACE}/deploy/ansible.cfg; then
+            sed -i "s|^roles_path=.*|roles_path=${WORKSPACE}/roles|" ${WORKSPACE}/deploy/ansible.cfg
+        else
+            echo "roles_path=${WORKSPACE}/roles" >> ${WORKSPACE}/deploy/ansible.cfg
+        fi
+        """
+    }
+}
+```
+
+* stage('Prepare Ansible For Execution'): Prepares Ansible for the pipeline run by updating the roles_path in the ansible.cfg file.
+* sh """ ... """: Executes the enclosed shell script:
+  - Prints the WORKSPACE path.
+  - grep -q '^roles_path=' ...: Checks if roles_path is already defined in ansible.cfg.
+  - sed -i: Updates roles_path if it exists.
+  - echo ... >>: Appends roles_path if it doesn't exist.
+
+
+### Stage: Test SSH Connections
+
+```stage('Test SSH Connections') {
+    steps {
+        script {
+            def hosts = [
+                [group: 'uat-webservers', ip: '172.31.26.143', user: 'ec2-user'],
+                [group: 'uat-webservers', ip: '172.31.18.71', user: 'ec2-user'],
+                [group: 'lb', ip: '172.31.18.31', user: 'ubuntu'],
+                [group: 'db', ip: '172.31.30.166', user: 'ubuntu']
+            ]
+            for (host in hosts) {
+                sshagent(['ssh-ansible']) {
+                    sh "ssh -o StrictHostKeyChecking=no -i /home/ubuntu/.ssh/key.pem ${host.user}@${host.ip} exit"
+                }
+            }
+        }
+    }
+}
+```
+
+* stage('Test SSH Connections'): Verifies that SSH connections to all target servers work properly.
+* script {}: Allows executing custom Groovy scripts.
+* def hosts: Defines a list of servers, including group names, IP addresses, and SSH usernames.
+* for (host in hosts): Iterates over the list of servers.
+* sshagent(['ssh-ansible']): Uses the ssh-ansible credentials to authenticate via SSH.
+* sh "ssh -o StrictHostKeyChecking=no ...": Executes an SSH command to test connectivity to each server.
+
+
+### Stage: Run Ansible Playbook
+
+```
+stage('Run Ansible playbook') {
+    steps {
+        sshagent(['ssh-ansible']) {
+            ansiblePlaybook(
+                become: true,
+                credentialsId: 'ssh-ansible',
+                disableHostKeyChecking: true,
+                installation: 'ansible',
+                inventory: "${WORKSPACE}/inventory/dev.yml",
+                playbook: "${WORKSPACE}/playbooks/site.yml"
+            )
+        }
+    }
+}
+```
+
+* stage('Run Ansible playbook'): Runs the Ansible playbook.
+* sshagent(['ssh-ansible']): Uses the ssh-ansible credentials for Ansible.
+* ansiblePlaybook: Executes the Ansible playbook with the following options:
+* become: true: Enables privilege escalation (e.g., sudo).
+* credentialsId: 'ssh-ansible': Uses the specified credentials for SSH.
+* disableHostKeyChecking: true: Skips SSH host key verification.
+* installation: 'ansible': Specifies the Ansible installation to use.
+* inventory: Points to the inventory file (dev.yml).
+* playbook: Specifies the playbook file (site.yml) to execute.
+
+
+### Stage: Clean Workspace After Build
+
+```
+stage('Clean Workspace after build') {
+    steps {
+        cleanWs(cleanWhenAborted: true, cleanWhenFailure: true, cleanWhenNotBuilt: true, cleanWhenUnstable: true, deleteDirs: true)
+    }
+}
+```
+
+* stage('Clean Workspace after build'): Cleans up the workspace after the pipeline execution.
+* cleanWs(...): Removes all files and directories in the workspace, with options to clean in specific scenarios:
+  - cleanWhenAborted: Clean if the pipeline was aborted.
+  - cleanWhenFailure: Clean if the pipeline failed.
+  - cleanWhenNotBuilt: Clean if the pipeline was skipped.
+  - cleanWhenUnstable: Clean if the pipeline completed but with warnings.
+
+
+### Summary
+
+* Initial cleanup: Ensures a fresh workspace.
+
+* Checkout SCM: Pulls the latest code.
+
+* Prepare Ansible: Configures Ansible for the pipeline.
+
+* Test SSH Connections: Verifies connectivity to all servers.
+
+* Run Ansible playbook: Deploys infrastructure or applications. Ansible playbook. : - Uses the sshagent step to ensure the SSH key is available for Ansible. - Runs the ansiblePlaybook step with the specified parameters . To ensure jenkins properly connects to all servers, you will need to install another plugin known as ssh agent , after that, go to manage jenkins > credentials > global > add credentials , usee ssh username and password , fill out the neccesary details and save.
+
+* Clean Workspace: Cleans up files post-build.
+
+* Now back to your inventory/dev.yml , update the inventory with thier respective servers private ip address
+
+* Ensure that the Git plugin is configured correctly in Jenkins:
+  - Go to Manage Jenkins → Global Tool Configuration. Ensure the Git executable is set up properly (e.g., /usr/bin/git).
+
+* Specify credentials for cloning:
+  - Create GitHub credentials in Jenkins under Manage Jenkins > Manage Credentials.
+
+
+### Update SIT Inventory
+
+Define servers in the sit inventory file:
+```
+[tooling]
+SIT-Tooling-Web-Server-Private-IP-Address
+
+[todo]
+SIT-Todo-Web-Server-Private-IP-Address
+
+[lb]
+SIT-Nginx-Private-IP-Address
+
+[db:vars]
+ansible_user=ec2-user
+ansible_python_interpreter=/usr/bin/python
+
+[db]
+SIT-DB-Server-Private-IP-Address
 ```
 
 
+### Add Parameters to Jenkinsfile
+
+1. Introduce parameters for environment and tags:
+
+```
+pipeline {
+    agent any
+    parameters {
+       string(name: 'inventory', defaultValue: 'dev',  description: 'This is the inventory file for the environment to deploy configuration')
+       string(name: 'tags', defaultValue: '', description: 'Ansible tags to limit execution')
+     }
+}
+```
+![image](https://github.com/user-attachments/assets/6243a432-d612-4eb5-87f7-d0b139b57651)
 
 
+2. Update the inventory path with this : ${inventory}
 
+3. Default values ensure the dev environment is used if no other value is specified.
 
+4. Update the jenkins file to included the ansible tags before it runs playbook:
 
+![image](https://github.com/user-attachments/assets/f817651f-5f21-42bf-a9a0-94125f6fae05)
 
+---
 
+### Step 6: Test and Deploy to Other Environments
 
+Test Ansible Locally by running the playbook with parameters to test the changes locally:
 
+```
+ansible-playbook -i inventory/dev.yml playbook.yml --tags "webserver"
+```
 
+* Execute Pipeline in Jenkins
+* Go to the pipeline job in Jenkins.
+* Select Build with Parameters.
+* Input values for the environment (e.g., sit) and tags (e.g., webserver).
+* Click Build Now to execute the deployment.
 
+![image](https://github.com/user-attachments/assets/1324b19a-3a4e-40fc-8a86-fbbba9a3754d)
 
-
-
-
-
-
-
-
-
-
-
-
+![image](https://github.com/user-attachments/assets/6990fec5-0c5f-42af-aa32-343b7b794315)
 
 
 
