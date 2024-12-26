@@ -897,6 +897,154 @@ ansible-playbook -i inventory/dev.yml playbook.yml --tags "webserver"
 ![image](https://github.com/user-attachments/assets/6990fec5-0c5f-42af-aa32-343b7b794315)
 
 
+### Step 7: Debugging tips
+
+#### Common Issues and Fixes
+##### Code Not Updated in Workspace:
+  * Ensure cleanWs() is called at the start of the pipeline.
+  * Check the workspace manually on the Jenkins server.
+
+##### Environment Variables Not Set:
+  * Verify ANSIBLE_CONFIG is correctly set.
+     
+##### Branch Mismatch:
+  * Confirm the correct branch is being used with git branch in the Jenkins workspace.
+
+---
+
+
+### CI/CD Pipeline for PHP TODO Application
+
+We previously set up a tooling website deployment through Ansible. Now, we are adding another PHP application to our infrastructure management. This application includes unit tests, making it ideal for demonstrating an end-to-end CI/CD pipeline.
+
+The deployment goal is to use Artifactory for storing and deploying code artifacts, bypassing direct Git integration.
+
+#### Install Artifactory
+
+Install artifactory on Ubuntu 24.04 LTS by following this guide [Install artifactory on Ubuntu 24.04 LTS](https://www.fosstechnix.com/install-jfrog-artifactory-on-ubuntu-24-04-lts/)
+
+![image](https://github.com/user-attachments/assets/1a860607-19c1-4627-954d-caf7764aac8a)
+
+cd /opt/artifactory-oss-6.9.6
+
+sudo ./bin/artifactory.sh start
+
+http://:8081
+
+### Phase 1: Prepare Jenkins
+
+#### 1. Fork the Repository
+Fork the following repository into your GitHub account: https://github.com/StegTechHub/php-todo.git
+
+![image](https://github.com/user-attachments/assets/0b37010e-a408-4a91-aed4-b600e12eadbb)
+
+#### 2. Install PHP and Dependencies
+On your Jenkins server, install PHP, its dependencies, and the Composer tool. You can do this manually initially and update Ansible later:
+
+```
+sudo apt update
+sudo apt install -y zip libapache2-mod-php phploc php-{xml,bcmath,bz2,intl,gd,mbstring,mysql,zip}
+```
+![image](https://github.com/user-attachments/assets/fd00be0b-b73b-4d47-93cf-27c834962a34)
+
+#### 3. Install Required Jenkins Plugins
+
+I. Plot Plugin: For displaying test reports and code coverage.
+
+![image](https://github.com/user-attachments/assets/b8e0da0f-5c59-45b9-b64c-70983cc9b6e6)
+
+II. Artifactory Plugin: For uploading code artifacts to Artifactory.
+
+![image](https://github.com/user-attachments/assets/35201083-63dc-48cd-bca2-f6d38758b16b)
+
+
+#### 4. Configure Artifactory in Jenkins
+I. Go to the Jenkins UI, manage Jenkins> system> Jfrog Platform Instances.
+II. Add Artifactory server details (ID, URL, and credentials).
+III. Test the connection to ensure it’s working.
+
+![image](https://github.com/user-attachments/assets/bbe1d88d-3307-461d-92b5-c0253e5fb237)
+
+IV. Create a local repository and call it todo-dev-local, set the repository type to generic
+
+![image](https://github.com/user-attachments/assets/c9eddc64-f957-4e54-900c-a8554234f986)
+
+
+### Phase 2: Integrate Artifactory Repository with Jenkins
+
+#### 1. Create a Dummy Jenkinsfile: 
+
+Add a basic `Jenkinsfile` to the repository and Install mysql client
+
+```
+sudo apt update
+sudo apt install mysql-client -y
+```
+
+#### 2. Set Up a Multibranch Pipeline
+
+Use the Blue Ocean interface to create a multibranch Jenkins pipeline.
+
+![image](https://github.com/user-attachments/assets/0de2723d-3a95-46ec-9b83-b70f5654e9cf)
+
+
+#### 3. Configure the Database
+Update the `env_vars/dev.yml` file to include the todo app database named `homestead`:
+
+```
+# MySQL configuration for the development environment
+mysql_root_username: "root"
+mysql_root_password: "Password.123"
+
+# Define databases and users to be created for the dev environment
+mysql_databases:
+  - name: homestead
+    encoding: utf8
+    collation: utf8_general_ci
+
+mysql_users:
+  - name: homestead
+    host: "%"
+    password: Password.123
+    priv: "*.*:ALL,GRANT"
+```
+
+>Also update your security group for port 3306 to allow inbound traffic from your jenkins server
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
