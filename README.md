@@ -989,7 +989,8 @@ Use the Blue Ocean interface to create a multibranch Jenkins pipeline.
 
 
 #### 3. Configure the Database
-Update the `env_vars/dev.yml` file to include the todo app database named `homestead`:
+
+I. Update the `env_vars/dev.yml` file to include the todo app database named `homestead`:
 
 ```
 # MySQL configuration for the development environment
@@ -1011,23 +1012,279 @@ mysql_users:
 
 >Also update your security group for port 3306 to allow inbound traffic from your jenkins server
 
+II. Save the actual details as environment variables in the Jenkins UI Navigate to Manage jenkins > System > Global properties > Environment variables
+
+![image](https://github.com/user-attachments/assets/30a92d3d-fd74-4ecd-acd9-58366d17e05e)
+
+III. Run the playbook:
+
+```
+cd ansible-config-mgt
+ansible-playbook -i inventory/dev.yml playbooks/site.yml
+```
+
+IV. Navigate to the db server and verify the creation of the databases and users.
+
+```
+sudo mysql -u root -p #(enter password 'Passw0rd123#' when prompted)
+
+# Verify databases
+SHOW DATABASES;
+
+#Verify users
+SELECT User, Host FROM mysql.user;
+
+#Verify privileges
+SHOW GRANTS FOR 'username'@'hostname'; #(Replace 'username' and 'hostname' with the actual username and hostname you want to check.)
+```
 
 
+#### 4. Update the `Jenkinsfile`: 
+
+```
+pipeline {
+  agent any
+  stages {
+    stage('Initial cleanup') {
+      steps {
+        dir(path: "${WORKSPACE}") {
+          deleteDir()
+        }
+
+      }
+    }
+
+    stage('Checkout SCM') {
+      steps {
+        git(branch: 'main', url: 'https://github.com/AyopoB/php-todo.git')
+      }
+    }
+
+    stage('Prepare Dependencies') {
+      steps {
+        sh 'mkdir -p bootstrap/cache'
+        sh 'chmod -R 775 bootstrap/cache'
+        sh 'mv .env.sample .env'
+        sh 'composer install'
+        sh 'php artisan migrate'
+        sh 'php artisan db:seed'
+        sh 'php artisan key:generate'
+      }
+    }
+
+  }
+}
+```
+
+## NOTE: If the above fails it might be due to composer compatibility issues with your php version, for that try the step below to fix the potential issues:
+
+1. Downgrade your PHP version to 7.4 if possible. Add the Required Repository Ubuntu does not include older PHP versions in its default repositories. Use the ondrej/php PPA (a popular source for PHP packages):
+
+```
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:ondrej/php
+sudo apt update
+```
+
+2. Install PHP 7.4 Install PHP 7.4 and any necessary modules:
+
+```
+sudo apt install -y php7.4 php7.4-cli php7.4-fpm php7.4-mbstring php7.4-xml php7.4-curl php7.4-mysql
+```
+
+3. Update Alternatives Register PHP 7.4 with the update-alternatives system:
+
+```
+sudo update-alternatives --install /usr/bin/php php /usr/bin/php7.4 74
+sudo update-alternatives --install /usr/bin/php php /usr/bin/php8.3 83
+```
+
+4. Switch to PHP 7.4 Use update-alternatives to select PHP 7.4:
+
+```
+sudo update-alternatives --config php
+```
+
+5. Verify the PHP Version Confirm the active PHP version:
+
+```
+php -v
+```
+
+### Notice the Prepare Dependencies section: 
+
+1. Sets up the .env file, installs libraries with Composer, and initializes the database using php artisan commands.
+
+2. After running php artisan migrate, check the database tables with SHOW TABLES to verify creation.
+
+> * The required file by PHP is .env so we are renaming .env.sample to .env
+> * Composer is used by PHP to install all the dependent libraries used by the application
+> * php artisan uses the .env file to setup the required database objects - (After successful run of this step, login to the database, run show tables and you will see the tables being created for you)
+
+![image](https://github.com/user-attachments/assets/37e0924e-f46c-466b-a043-1f9125bf3aaf)
+
+3. Now, Let's add unit test to it:
+
+```
+pipeline {
+    agent any
+    stages {
+        stage("Initial Cleanup") {
+            steps {
+                dir("${WORKSPACE}") {
+                    deleteDir()
+                }
+            }
+        }
+        stage('Checkout SCM') {
+            steps {
+                git branch: 'main', url: 'https://github.com/AyopoB/php-todo.git'
+            }
+        }
+        stage('Prepare Dependencies') {
+            steps {
+                sh 'mv .env.sample .env'
+                sh '''
+                    mkdir -p bootstrap/cache
+                    mkdir -p storage/framework/sessions
+                    mkdir -p storage/framework/views
+                    mkdir -p storage/framework/cache                        
+                    chown -R jenkins:jenkins bootstrap storage 
+                    chmod -R 775 bootstrap storage 
+                '''
+                sh 'composer install'
+                sh 'php artisan migrate'
+                sh 'php artisan db:seed'
+                sh 'php artisan key:generate'
+            }
+        }
+        stage('Execute Unit Tests') {
+            steps {
+                sh './vendor/bin/phpunit'
+            }
+        }
+    }
+}
+```
+
+![image](https://github.com/user-attachments/assets/63dd53fe-d1f1-4a10-88a3-d6f6d9600eec)
 
 
+### Phase 3: Code Quality Analysis
+
+1. Set Up phploc phploc is a tool for code quality analysis in PHP. Install it and configure Jenkins to plot the data. PHPLOC (PHP Lines Of Code) is a tool for measuring the size and complexity of PHP projects. The output of the data will be saved in the /build/logs/phploc.csv file.
+
+2. Add Code Analysis to the Jenkinsfile
+
+```
+stage('Code Analysis') {
+    steps {
+        sh 'phploc app/ --log-csv build/logs/phploc.csv'
+    }
+}
+```
+
+![image](https://github.com/user-attachments/assets/e6727d3f-ca97-4e7e-9e60-0b4679a2c893)
 
 
+3. Configure the Plot Plugin Use the Plot plugin to graphically display phploc data in Jenkins. Add the following stage to the Jenkinsfile:
+
+```
+stage('Plot Code Coverage Report') {
+      steps {
+
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Lines of Code (LOC),Comment Lines of Code (CLOC),Non-Comment Lines of Code (NCLOC),Logical Lines of Code (LLOC)                          ', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'A - Lines of code', yaxis: 'Lines of Code'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Directories,Files,Namespaces', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'B - Structures Containers', yaxis: 'Count'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Average Class Length (LLOC),Average Method Length (LLOC),Average Function Length (LLOC)', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'C - Average Length', yaxis: 'Average Lines of Code'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Cyclomatic Complexity / Lines of Code,Cyclomatic Complexity / Number of Methods ', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'D - Relative Cyclomatic Complexity', yaxis: 'Cyclomatic Complexity by Structure'      
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Classes,Abstract Classes,Concrete Classes', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'E - Types of Classes', yaxis: 'Count'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Methods,Non-Static Methods,Static Methods,Public Methods,Non-Public Methods', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'F - Types of Methods', yaxis: 'Count'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Constants,Global Constants,Class Constants', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'G - Types of Constants', yaxis: 'Count'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Test Classes,Test Methods', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'I - Testing', yaxis: 'Count'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Logical Lines of Code (LLOC),Classes Length (LLOC),Functions Length (LLOC),LLOC outside functions or classes ', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'AB - Code Structure by Logical Lines of Code', yaxis: 'Logical Lines of Code'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Functions,Named Functions,Anonymous Functions', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'H - Types of Functions', yaxis: 'Count'
+            plot csvFileName: 'plot-396c4a6b-b573-41e5-85d8-73613b2ffffb.csv', csvSeries: [[displayTableFlag: false, exclusionValues: 'Interfaces,Traits,Classes,Methods,Functions,Constants', file: 'build/logs/phploc.csv', inclusionFlag: 'INCLUDE_BY_STRING', url: '']], group: 'phploc', numBuilds: '100', style: 'line', title: 'BB - Structure Objects', yaxis: 'Count'
 
 
+      }
+    }
+```
+> You should now see a Plot menu item on the left menu. Click on it to see the charts. (The analytics may not mean much to you as it is meant to be read by developers. So, you need not worry much about it – this is just to give you an idea of the real-world implementation).
+
+![image](https://github.com/user-attachments/assets/4a1ee07f-6b94-4568-a04d-dde375a5551e)
+
+![image](https://github.com/user-attachments/assets/0a3e2fa2-8afe-4261-beb8-fa05bbc0adbb)
 
 
+4. Bundle the application code for into an artifact (archived package) upload to Artifactory
+
+```
+stage ('Package Artifact') {
+    steps {
+            sh 'zip -qr php-todo.zip ${WORKSPACE}/*'
+     }
+    }
+```
+
+![image](https://github.com/user-attachments/assets/59a69288-1c0e-4a7e-b214-7fda628200db)
 
 
+5. Publish the resulted artifact into Artifactory
+
+```
+stage ('Upload Artifact to Artifactory') {
+          steps {
+            script { 
+                 def server = Artifactory.server 'artifactory-server'                 
+                 def uploadSpec = """{
+                    "files": [
+                      {
+                       "pattern": "php-todo.zip",
+                       "target": "todo-dev-local/php-todo",
+                       "props": "type=zip;status=ready"
+
+                       }
+                    ]
+                 }""" 
+
+                 server.upload spec: uploadSpec
+               }
+            }
+  
+        }
+```
+
+![image](https://github.com/user-attachments/assets/8cc9ba7a-3531-499b-b36b-f2ce72f6738e)
 
 
+6. Confirm upload on Artifactory:
+
+![image](https://github.com/user-attachments/assets/eb0aad40-8a9a-4b7b-aaf7-7793e4752200)
 
 
+7. Deploy the application to the dev environment by launching Ansible pipeline
 
+```
+stage ('Deploy to Dev Environment') {
+    steps {
+    build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'dev']], propagate: false, wait: true
+    }
+  }
+```
+> The build job used in this step tells Jenkins to start another job. In this case it is the ansible-project job, and we are targeting the main branch. Hence, we have ansible-project/main. Since the Ansible project requires parameters to be passed in, we have included this by specifying the parameters section. The name of the parameter is env and its value is dev. Meaning, deploy to the Development environment.
+
+We need to get some things in place first.
+
+- First create an rhel ec2 instance for the development todo webserver named DEV-todo-webapp.
+
+- Include it's private IP in the dev environment inventory file.
+
+![image](https://github.com/user-attachments/assets/166a1bc9-7c11-4a69-a200-ea152d1ed5e2)
+
+> But how are we certain that the code being deployed has the quality that meets corporate and customer requirements? Even though we have implemented Unit Tests and Code Coverage Analysis with phpunit and phploc, we still need to implement Quality Gate to ensure that ONLY code with the required code coverage, and other quality standards make it through to the environments.
+
+> To achieve this, we need to configure SonarQube - An open-source platform developed by SonarSource for continuous inspection of code quality to perform automatic reviews with static analysis of code to detect bugs, code smells, and security vulnerabilities
 
 
 
