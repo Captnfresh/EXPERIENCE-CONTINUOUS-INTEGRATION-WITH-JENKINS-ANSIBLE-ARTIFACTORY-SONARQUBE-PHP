@@ -1626,9 +1626,83 @@ Replace `<server_IP>` with your server's IP address.
 
 ![image](https://github.com/user-attachments/assets/ba8693ce-cf42-460f-b119-854f80f2bec9)
 
+2. Login with the default credentials:
+   * Username: `admin`
+   * Password: `admin`
+
+![image](https://github.com/user-attachments/assets/586d7e9b-793f-4335-940d-177759fba310)
+
+3. Change the default password for better security.
 
 
+### Configuring SonarQube and Jenkins for Quality Gate
 
+#### Steps to Configure SonarQube in Jenkins
+
+#### 1. Install SonarScanner Plugin
+
+* Go to Manage Jenkins > Plugins > Available Plugins.
+* Search for SonarScanner and install it.
+
+#### 2. Add SonarQube Server in Jenkins
+
+- Navigate to Manage Jenkins > Configure System.
+
+- Under "SonarQube Servers":
+  * Add a new server configuration.
+  * Provide a name (e.g., sonarqube).
+  * Input the server URL (e.g., http://<SonarQube-Server-IP>:9000).
+  * Add authentication token generated in the next step.
+
+![image](https://github.com/user-attachments/assets/edbb3127-c423-4e49-ae8d-143134e718f6)
+
+
+#### 3. Generate Authentication Token in SonarQube
+
+* Log into SonarQube and navigate to `User > My Account > Security > Generate Tokens`.
+* Create a token and copy it.
+
+![image](https://github.com/user-attachments/assets/8cd9b445-e93d-41d7-b5d8-7ddf02aed81c)
+
+![image](https://github.com/user-attachments/assets/db07e03a-eb84-4ec1-98e5-4d4a42dfd24f)
+
+![image](https://github.com/user-attachments/assets/8f6f7072-0a6f-4948-a9ac-55b8b0afad66)
+
+
+#### 4. Configure Webhook for Quality Gate
+
+* In SonarQube, navigate to Administration > Configuration > Webhooks > Create.
+* Add the Jenkins server URL for the webhook: http://<JENKINS_HOST>/sonarqube-webhook/.
+* Save the configuration.
+
+![image](https://github.com/user-attachments/assets/976f951a-187d-4d62-a076-a9a99d3837e2)
+
+* Configure SonarQubeScanner tool: `Manage jenkins > Tools > Add SonarQube scanner`
+
+
+### Update Jenkins Pipeline for SonarQube
+
+#### 1. Quality Gate Stage in Jenkinsfile
+
+* Add the following snippet to your `Jenkinsfile`:
+
+```
+stage('SonarQube Quality Gate') {
+    environment {
+        scannerHome = tool 'SonarQubeScanner'
+    }
+    steps {
+        withSonarQubeEnv('sonarqube') {
+            sh "${scannerHome}/bin/sonar-scanner"
+        }
+    }
+}
+```
+
+![image](https://github.com/user-attachments/assets/8e59753c-0eab-4bb9-963f-109b69694b76)
+>NOTE: The above step will fail because we have not updated `sonar-scanner.properties
+
+#### 2. Now, we configure sonar-scanner.properties
 
 
 
