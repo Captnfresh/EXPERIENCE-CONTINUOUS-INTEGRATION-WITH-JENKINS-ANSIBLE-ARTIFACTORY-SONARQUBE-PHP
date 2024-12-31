@@ -1736,19 +1736,116 @@ ls -latr
 
 You should see files like `sonar-scanner` and `sonar-scanner-debug`.
 
+* Run the build again
+
+![image](https://github.com/user-attachments/assets/d97b5ef4-2e68-425d-883b-56d4100eb939)
+
+
+* Generate Pipeline Syntax:
+To generate additional code snippets for SonarQube integration:
+  - Navigate to Dashboard > Pipeline Syntax in Jenkins.
+  - Click on steps then, Select withSonarQubeEnv.
+  - Generate and add the required block to your pipeline.
+
+![image](https://github.com/user-attachments/assets/fdba2786-4e29-4492-8371-d33bd54a193b)
+
+  - Run the build again
+
+![image](https://github.com/user-attachments/assets/3ee1ce40-0178-4b9a-bb0f-7dc6344e703e)
 
 
 
+### Implementing Quality Gate Conditions
+
+#### 1. Update Pipeline to Include Branch Filtering and Timeout
+
+Modify the `Jenkinsfile` to check branch names and enforce quality gate conditions:
+
+```
+stage('SonarQube Quality Gate') {
+    when {
+        branch pattern: "^develop*|^hotfix*|^release*|^main*", comparator: "REGEXP"
+    }
+    environment {
+        scannerHome = tool 'SonarQubeScanner'
+    }
+    steps {
+        withSonarQubeEnv('sonarqube') {
+            sh "${scannerHome}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+        }
+        timeout(time: 1, unit: 'MINUTES') {
+            waitForQualityGate abortPipeline: true
+        }
+    }
+}
+```
+To test, create different branches and push to GitHub. You will realise that only branches other than develop, hotfix, release, main, or master will be able to deploy the code.
+
+Create multiple branches and commit, push the new code.
+
+![image](https://github.com/user-attachments/assets/b0b52594-a977-446c-aed9-e1670ee0b2c6)
+
+
+For Branch `main`
+
+![image](https://github.com/user-attachments/assets/6fcc539b-038b-4474-91b1-f4236d8d9e6f)
+>Notice that with the current state of the code, it cannot be deployed to Integration environments due to its quality. In the real world, DevOps engineers will push this back to developers to work on the code further, based on SonarQube quality report. Once everything is good with code quality, the pipeline will pass and proceed with sipping the codes further to a higher environment.
+
+
+## Complete the following tasks to finish Project 14
+
+1. Introduce Jenkins agents/slaves – Add 2 more servers to be used as Jenkins slave. Configure Jenkins to run its pipeline jobs randomly on any available slave nodes. Let's add 2 more servers to be used as Jenkins slave and install java in them.
+
+```
+sudo apt update
+sudo apt install default-jdk
+```
+
+2. Configure webhook between Jenkins and GitHub to automatically run the pipeline when there is a code push. Let's Configure the new nodes on Jenkins Server. Navigate to Dashboard > Manage Jenkins > Nodes, click on New node and enter a Name and click on create.
+
+To connect to slave_one completed this fields and save.
+
+Name: slave_one Remote root directory: /opt/build (This can be any directory for the builds) Labels: slave_one save
+
+![image](https://github.com/user-attachments/assets/f4879e85-cfda-4ca2-8ec4-161d4f8eae9f)
+
+To connect to slave_one, click on the slave_one and if you finsih configuration save it you see
+
+![image](https://github.com/user-attachments/assets/41b78bf2-a230-4c8c-86f3-36fe9b63b675)
+
+Use either options. In this case, I use the first option
+>before running please check yor public ip addres of your jenkin is same as the if not go to Dashboard> manage Jenkin > systme and update current IP
+
+```
+sudo mkdir -p /opt/build
+sudo chown -R ubuntu:ubuntu /opt/build
+sudo chmod -R 755 /opt/build
+ls -ld /opt/build
+```
+
+To make it run in background and &
+
+![image](https://github.com/user-attachments/assets/c8b442fa-2c4b-45e3-8f59-a63e21b32656)
 
 
 
+### Now slave_two
 
+![image](https://github.com/user-attachments/assets/5e28c877-c981-44f1-8777-07f622cb2434)
 
+3. Deploy the application to all the environments in order to deploy to all environment we Add these stages to our existing Jenkins pipeline script
 
+Add the following configuration which is related to the php-todo project to the sonar.properties file
 
-
-
-
+```
+sonar.host.url=http://<SonarQube-Server-IP-address>:9000
+sonar.projectKey=php-todo
+#----- Default source code encoding
+sonar.sourceEncoding=UTF-8
+sonar.php.exclusions=**/vendor/**
+sonar.php.coverage.reportPaths=build/logs/clover.xml
+sonar.php.tests.reportPath=build/logs/junit.xml
+```
 
 
 
