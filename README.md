@@ -1286,8 +1286,345 @@ We need to get some things in place first.
 
 > To achieve this, we need to configure SonarQube - An open-source platform developed by SonarSource for continuous inspection of code quality to perform automatic reviews with static analysis of code to detect bugs, code smells, and security vulnerabilities
 
+---
+
+### SonarQube Installation
+
+#### Understanding SonarQube and Software Quality
+Before diving into the installation of SonarQube, it is crucial to understand the concepts it addresses:
+
+#### Software Quality
+Software quality refers to the extent to which a software component, system, or process meets specified requirements based on user needs and expectations.
+
+#### Software Quality Gates
+Quality gates are acceptance criteria presented as a predefined set of quality measures that a software project must satisfy to progress to the next stage of its lifecycle. SonarQube facilitates the creation of these quality gates, ensuring only high-quality software is shipped.
+
+#### Importance of SonarQube in DevOps
+In DevOps pipelines, speed is essential for software delivery. However, the quality of delivery must not be compromised. SonarQube addresses this by enabling the setup of quality gates, ensuring adherence to predefined quality standards. In this project, we will use the predefined "Sonar Way" quality gate. Custom quality gates can also be defined in collaboration with software testers, developers, and project leads.
+
+---
+
+### SonarQube Installation on Ubuntu 20.04 with PostgreSQL Backend
+This guide walks through the manual installation of SonarQube version 7.9.3 with PostgreSQL as its backend database. The installation process involves configuring the Linux kernel for optimal performance, installing dependencies, setting up PostgreSQL, and configuring SonarQube. Automation using Ansible is recommended for production environments.
 
 
+#### Step 1: Tune Linux Kernel
+To optimize the performance of SonarQube, certain kernel parameters need to be adjusted. These changes can be made either for the current session or permanently.
+
+##### Temporary Changes
+
+Execute the following commands:
+
+```
+sudo sysctl -w vm.max_map_count=262144
+sudo sysctl -w fs.file-max=65536
+ulimit -n 65536
+ulimit -u 4096
+```
+
+##### Permanent Changes
+
+To make these changes persistent:
+
+1. Edit the file `/etc/security/limits.conf`.
+2. Append the following lines:
+
+```
+sonarqube - nofile 65536
+sonarqube - nproc 4096
+```
+   
+#### Step 2: Update and Upgrade System Packages
+
+```
+sudo apt-get update
+sudo apt-get upgrade -y
+```
+
+#### Step 3: Install Required Packages: 
+
+Install wget and unzip: 
+
+```
+sudo apt-get install wget unzip -y
+```
+
+
+#### Step 4: Install OpenJDK and Java Runtime Environment (JRE) 17
+
+1. SonarQube is Java-based, so installing Java is a prerequisite.
+
+```
+sudo apt-get install openjdk-17-jdk -y
+sudo apt-get install openjdk-17-jre -y
+```
+
+2. Set Default JDK
+
+```
+sudo update-alternatives --config java
+```
+From the list, select OpenJDK 17 by entering the corresponding number.
+
+3. Verify Java Installation
+
+```
+java -version
+```
+![image](https://github.com/user-attachments/assets/34b686f3-e3b0-4fca-a572-c0cdd040698f)
+
+
+#### Step 5: Install and Setup postgresql for Sonarqube
+
+1. Add Postgresql repo to the repo list
+
+```
+sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" >> /etc/apt/sources.list.d/pgdg.list'
+```
+
+2. Download Postgresql software
+
+```
+wget -q https://www.postgresql.org/media/keys/ACCC4CF8.asc -O - | sudo apt-key add -
+```
+
+3. Install the Postgresql databases server:
+
+```
+sudo apt-get -y install postgresql postgresql-contrib
+```
+
+4. Start Postgresql server
+
+```
+sudo systemctl start postgresql
+```
+
+5. Enable Postgresql to start automatically on reboot
+
+```
+sudo systemctl enable postgresql
+```
+
+6. Check Postgresql status
+
+```
+sudo systemctl status postgresql
+```
+
+
+#### Step 6: Configure Postgre
+
+1. Change password for default postgres user. Pass in your intended password (Passw0rd123#)
+
+```
+sudo passwd postgres
+```
+
+2. switch to postgres user
+
+```
+su - postgres
+```
+
+3. Create new user
+```
+createuser sonar
+```
+
+4. Switch to posgresql shell
+
+```
+psql
+```
+
+5. Set a password for the newly created postgresql user 
+
+```
+ALTER USER sonar WITH ENCRYPTED password 'sonar';
+```
+
+6. Create a new database for PostgreSQL database by running:
+
+```
+CREATE DATABASE sonarqube OWNER sonar;
+```
+
+7. Grant all privileges to sonar user on sonarqube Database.
+
+```
+grant all privileges on DATABASE sonarqube to sonar;
+```
+
+8. Exit from the psql shell:
+
+```
+\q
+```
+
+9. Switch to root user:
+
+```
+exit
+```
+
+
+#### Step 7: Install Sonarqube on Ubuntu 24.04.LTS
+
+You can find the opensource distributions [here](https://binaries.sonarsource.com/?prefix=Distribution/sonarqube/)
+
+```
+# Navigate to the /tmp directory and download the installation files
+cd /tmp && sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.9.8.100196.zip
+
+# unzip the archive to the /opt directory
+sudo unzip sonarqube-9.9.8.100196.zip -d /opt
+
+# Rename extracted setup to /opt/sonarqube directory
+sudo mv /opt/sonarqube-9.9.8.100196 /opt/sonarqube
+```
+
+#### Configure Sonarqube: 
+
+Sonarqube cannot be run as root user. Hence, we will create a group and user to run sonarqube
+
+
+1. Create a group sonar
+
+```
+sudo groupadd sonar
+```
+
+2. Now add a user with control over the /opt/sonarqube directory
+
+```
+sudo useradd -c "user to run SonarQube" -d /opt/sonarqube -g sonar sonar
+sudo chown sonar:sonar /opt/sonarqube -R
+```
+
+3. Open SonarQube configuration file using your favourite text editor (e.g., nano or vim)
+
+```
+sudo vim /opt/sonarqube/conf/sonar.properties
+
+# Find the following: (Make sure to uncomment them and add the username and password of the postgresql database )
+#sonar.jdbc.username=
+#sonar.jdbc.password=
+#sonar.jdbc.url=jdbc:postgresql://localhost:5432/sonarqube
+```
+
+4. Edit the sonar script file and set it a
+
+```
+sudo vi /opt/sonarqube/bin/linux-x86-64/sonar.sh
+```
+
+5. Paste the following under the APP_NAME
+
+```
+RUN_AS_USER=sonar
+```
+
+![image](https://github.com/user-attachments/assets/57df1050-79dd-47d3-8897-8628ef8c1257)
+
+
+![image](https://github.com/user-attachments/assets/421f4c0c-75ac-4768-8e61-c24cbdb5e142)
+
+
+#### Start SonarQube
+
+1. Switch to sonar user
+
+```
+sudo su sonar
+```
+
+2. Move to the script directory
+
+```
+cd /opt/sonarqube/bin/linux-x86-64/
+```
+
+3. Run the script to start sonarqube
+
+```
+./sonar.sh start
+```
+
+4. Run the script to check sonarqube status
+
+```
+./sonar.sh status
+```
+
+5. To check SonarQube logs, navigate to /opt/sonarqube/logs/sonar.log directory
+
+```
+tail /opt/sonarqube/logs/sonar.log
+```
+
+![image](https://github.com/user-attachments/assets/48cd7762-1a60-4cb9-acec-3de8fdf21584)
+
+
+#### Configure SonarQube as a Systemd Service
+
+```
+# Stop the currently running SonarQube service
+cd /opt/sonarqube/bin/linux-x86-64/
+./sonar.sh stop
+
+# exit the session
+exit
+
+# Create a systemd service file for SonarQube to run as System Startup.
+sudo vi /etc/systemd/system/sonar.service
+
+# Add the following configuration:
+[Unit]
+Description=SonarQube service
+After=syslog.target network.target
+
+[Service]
+Type=forking
+
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+
+User=sonar
+Group=sonar
+Restart=always
+
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
+
+# Save the file and exit
+:wq
+
+# Control the service with systemctl
+sudo systemctl start sonar
+sudo systemctl enable sonar
+sudo systemctl status sonar
+```
+
+![image](https://github.com/user-attachments/assets/0db1fa25-eb3b-407b-ac29-b49a5d787df7)
+
+![image](https://github.com/user-attachments/assets/e7c4a87c-19ed-4271-bcd8-7c4535406fae)
+
+
+#### Access SonarQube
+
+1. Open your browser and navigate to the SonarQube instance:
+>Firstly add an inbound rule for port 9000 in your AWS security group
+
+```
+http://<server_IP>:9000
+```
+Replace `<server_IP>` with your server's IP address.
+
+![image](https://github.com/user-attachments/assets/ba8693ce-cf42-460f-b119-854f80f2bec9)
 
 
 
