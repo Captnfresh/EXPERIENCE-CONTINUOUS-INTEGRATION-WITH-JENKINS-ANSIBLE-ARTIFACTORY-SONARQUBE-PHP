@@ -1837,6 +1837,8 @@ To make it run in background and &
 
 Add the following configuration which is related to the php-todo project to the sonar.properties file
 
+
+Deployment
 ```
 sonar.host.url=http://<SonarQube-Server-IP-address>:9000
 sonar.projectKey=php-todo
@@ -1848,42 +1850,31 @@ sonar.php.tests.reportPath=build/logs/junit.xml
 ```
 
 
+Test Environment
+
+```
+        stage ('Deploy to Test Environment') {
+            agent { label 'slave_two' } // Specify another Jenkins slave for deployment
+            steps {
+                build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'pentest']], propagate: false, wait: true
+            }
+        }
+```
+
+Production Environment
+
+```
+        stage ('Deploy to Production Environment') {
+            agent any
+            steps {
+                build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'ci']], propagate: false, wait: true
+            }
+        }
+```
+
+![image](https://github.com/user-attachments/assets/f8ba14fd-7973-4550-a294-c82d9d8ddd50)
 
 
-
-
-
-
-
-
-
-
-
-### Summary:
-- **Nginx** will act as a reverse proxy to handle web traffic and route it to the correct internal server based on the subdomain.
-- DNS entries need to be created for each service and environment under the **devops.com** domain to allow easy access.
-- **Ansible Inventory** files define which servers belong to which environments, and you can group servers to manage them more efficiently.
-- **group_vars** can be used to set shared variables for groups of servers, ensuring consistency and reducing redundancy in your configurations.
-- **pentest:children** allows grouping related servers together (such as **pentest-todo** and **pentest-tooling**) to manage them both at once, while still having the ability to target individual servers.
-- **DevOps** involves automating and managing servers for various environments that simulate different stages of the software development lifecycle.
-- You’ll work with servers for **CI**, **Dev**, and **Pentest** environments initially, then move to **SIT** and **UAT**.
-- You don’t need to create all servers at once—create just enough for the environment you're working on to minimize costs.
-- **Pentest** is unique because it requires specific security tools and configurations, while **SIT** and **UAT** are more about testing and user validation.
-- In your **CI environment**, you will need to configure both **SonarQube** and **Artifactory** to ensure that:
-- **SonarQube** helps you maintain high code quality by automatically reviewing your code for bugs, vulnerabilities, and other issues.
-- **Artifactory** manages your build artifacts, ensuring that every build is safely stored and accessible for other environments (e.g., from Dev to Prod).
-
-By creating **Ansible roles** for each of these tools, you can automate the installation, configuration, and integration processes, making your setup more efficient, consistent, and scalable.
-
-In simpler terms:
-- **SonarQube** makes sure your code quality is high, helping you catch bugs and vulnerabilities early.
-- **Artifactory** ensures that the code you build is stored safely and can be reused whenever needed in the pipeline.
-
-These tools, configured via **Ansible roles**, are key to automating the process of setting up a robust CI/CD pipeline, enabling faster and more reliable software delivery.
-
-
-
-This setup allows you to build your project step by step, ensuring that the environments needed for each stage of development and testing are in place without incurring unnecessary costs.
 
 
 
