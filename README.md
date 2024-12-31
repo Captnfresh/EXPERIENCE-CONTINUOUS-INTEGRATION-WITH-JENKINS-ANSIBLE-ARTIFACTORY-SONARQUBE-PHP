@@ -1704,6 +1704,39 @@ stage('SonarQube Quality Gate') {
 
 #### 2. Now, we configure sonar-scanner.properties
 
+* Locate the scanner configuration directory on the Jenkins server:
+
+```
+cd /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/SonarQubeScanner/conf/
+
+sudo vi sonar-scanner.properties
+```
+
+* Update the file with your project configuration. Example for `php-todo`:
+
+```
+sonar.host.url=http://<SonarQube-Server-IP>:9000
+sonar.projectKey=php-todo
+#----- Default source code encoding
+sonar.sourceEncoding=UTF-8
+sonar.php.exclusions=**/vendor/**
+sonar.php.coverage.reportPaths=build/logs/clover.xml
+sonar.php.tests.reportPath=build/logs/junit.xml
+```
+
+>HINT: To know what exactly to put inside the sonar-scanner.properties file, SonarQube has a configurations page where you can get some directions.
+
+
+* Examine Scanner Tool: Verify the scanner setup:
+
+```
+cd /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/SonarQubeScanner/bin
+ls -latr
+```
+
+You should see files like `sonar-scanner` and `sonar-scanner-debug`.
+
+
 
 
 
